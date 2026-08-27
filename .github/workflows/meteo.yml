@@ -1,0 +1,57 @@
+name: Montesilvano Meteo Watch
+
+on:
+  schedule:
+    # Ogni 10 minuti. GitHub impone un minimo di 5 minuti e può ritardare
+    # l'esecuzione nei momenti di alto carico (delay tipici 5-30 min): 10 min
+    # è il compromesso più affidabile per un job su repo pubblica gratuita.
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}   # permette di lanciarlo manualmente da Actions > Run workflow
+
+# Evita run sovrapposti se uno precedente è ancora in coda/esecuzione
+concurrency:
+  group: montesilvano-meteo-watch
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # necessario per committare state/message_id.txt (edit-in-place Telegram)
+
+jobs:
+  run-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run meteo watch
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TARGET_LAT: ${{ vars.TARGET_LAT }}
+          TARGET_LON: ${{ vars.TARGET_LON }}
+          TARGET_NAME: ${{ vars.TARGET_NAME }}
+          CUSTOM_STATION_URL: ${{ vars.CUSTOM_STATION_URL }}
+        run: python src/main.py
+
+      # Il modulo telegram_client.py salva l'id del messaggio Telegram in
+      # state/message_id.txt per poterlo MODIFICARE (editMessageText) nei
+      # cicli successivi invece di inviarne uno nuovo ogni volta. Questo
+      # file deve persistere tra un run e l'altro: la persistenza più
+      # semplice e affidabile su Actions è un piccolo commit automatico.
+      - name: Persist Telegram message id
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add state/message_id.txt 2>/dev/null || true
+          git diff --staged --quiet || git commit -m "chore: aggiorna message_id [skip ci]"
+          git push || echo "Nessuna modifica da pushare o push fallito (non bloccante)"
