@@ -1,0 +1,7 @@
+httpx==0.27.2
+numpy==1.26.4
+Pillow==10.4.0
+scipy==1.13.1
+opencv-python-headless==4.10.0.84
+setuptools<81
+pysteps==1.13.0
