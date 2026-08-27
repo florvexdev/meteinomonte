@@ -1,0 +1,31 @@
+name: Keepalive
+
+# Le schedulazioni su repository pubbliche vengono disabilitate automaticamente
+# da GitHub dopo 60 giorni senza attività nel repo. Questo job crea un piccolo
+# commit "no-op" una volta al mese per mantenere il repository attivo e quindi
+# evitare che il workflow principale (meteo.yml) venga silenziosamente disattivato.
+
+on:
+  schedule:
+    - cron: '0 3 1 * *'   # una volta al mese, il giorno 1 alle 03:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Touch heartbeat file
+        run: |
+          mkdir -p .github/heartbeat
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > .github/heartbeat/last_ping.txt
+      - name: Commit heartbeat
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/heartbeat/last_ping.txt
+          git diff --staged --quiet || git commit -m "chore: keepalive ping"
+          git push
